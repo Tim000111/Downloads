@@ -1,0 +1,2 @@
+NodeGraphQt==0.6.44
+PyQt5

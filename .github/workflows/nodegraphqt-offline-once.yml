@@ -67,8 +67,10 @@ jobs:
         shell: pwsh
         run: |
           Compress-Archive -Path NodeGraphQt-Offline/* -DestinationPath NodeGraphQt-Offline-win_amd64-py310.zip -Force
+          if (!(Test-Path NodeGraphQt-Offline-win_amd64-py310.zip)) { throw "Offline ZIP was not created" }
+          Write-Host "Offline ZIP size:" (Get-Item NodeGraphQt-Offline-win_amd64-py310.zip).Length
       - uses: actions/upload-artifact@v4
         with:
           name: NodeGraphQt-Offline-win_amd64-py310
           path: NodeGraphQt-Offline-win_amd64-py310.zip
-          retention-days: 7
+          retention-days: 30

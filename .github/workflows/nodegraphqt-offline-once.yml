@@ -49,8 +49,19 @@ jobs:
           git diff --cached --quiet
           if ($LASTEXITCODE -ne 0) {
             git commit -m "build: add verified Windows Python 3.10 offline wheels and source"
-            git push
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            # Integrate remote commits without force-pushing or discarding collected wheels.
+            for ($attempt = 1; $attempt -le 3; $attempt++) {
+              git fetch origin main
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+              git rebase origin/main
+              if ($LASTEXITCODE -ne 0) {
+                git rebase --abort
+                throw "Rebase conflict; existing remote changes preserved."
+              }
+              git push origin HEAD:main
+              if ($LASTEXITCODE -eq 0) { break }
+              if ($attempt -eq 3) { throw "Push rejected after three attempts." }
+            }
           }
       - name: Build downloadable ZIP
         shell: pwsh

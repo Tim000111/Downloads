@@ -1,0 +1,63 @@
+name: One-time NodeGraphQt offline wheelhouse
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/nodegraphqt-offline-once.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  collect:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          architecture: x64
+      - name: Download all Windows x64 Python 3.10 wheels
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          New-Item -ItemType Directory -Force NodeGraphQt-Offline/wheelhouse,NodeGraphQt-Offline/source | Out-Null
+          python -m pip download --only-binary=:all: --dest NodeGraphQt-Offline/wheelhouse -r NodeGraphQt-Offline/requirements.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pip download --no-deps --no-binary=:all: --dest NodeGraphQt-Offline/source NodeGraphQt==0.6.44
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python NodeGraphQt-Offline/scripts/check_wheels.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Test actual offline install
+        shell: pwsh
+        run: |
+          python -m venv "$env:RUNNER_TEMP/offline-test"
+          & "$env:RUNNER_TEMP/offline-test/Scripts/python.exe" -m pip install --no-index --find-links NodeGraphQt-Offline/wheelhouse -r NodeGraphQt-Offline/requirements.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "$env:RUNNER_TEMP/offline-test/Scripts/python.exe" -m pip check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "$env:RUNNER_TEMP/offline-test/Scripts/python.exe" -c "import NodeGraphQt; from PyQt5.QtWidgets import QApplication; print('OFFLINE IMPORT OK')"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Save binaries and source in repository
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f NodeGraphQt-Offline/wheelhouse/*.whl NodeGraphQt-Offline/source/*
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "build: add verified Windows Python 3.10 offline wheels and source"
+            git push
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Build downloadable ZIP
+        shell: pwsh
+        run: |
+          Compress-Archive -Path NodeGraphQt-Offline/* -DestinationPath NodeGraphQt-Offline-win_amd64-py310.zip -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NodeGraphQt-Offline-win_amd64-py310
+          path: NodeGraphQt-Offline-win_amd64-py310.zip
+          retention-days: 7
